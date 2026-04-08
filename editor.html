@@ -1,0 +1,1481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultraman Level Editor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #1a1a2e;
+            color: #eee;
+            font-family: 'Segoe UI', monospace;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Top toolbar */
+        #toolbar {
+            background: #16213e;
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 2px solid #0f3460;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+        }
+        #toolbar label { font-size: 13px; color: #aaa; }
+        #toolbar select, #toolbar input, #toolbar button {
+            background: #0f3460;
+            color: #eee;
+            border: 1px solid #444;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 13px;
+        }
+        #toolbar button {
+            cursor: pointer;
+            padding: 5px 14px;
+            font-weight: bold;
+        }
+        #toolbar button:hover { background: #1a5276; }
+        #toolbar button.active { background: #e94560; border-color: #e94560; }
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding-right: 12px;
+            border-right: 1px solid #333;
+        }
+        .toolbar-group:last-child { border-right: none; }
+
+        /* Main area */
+        #main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Tile palette sidebar */
+        #palette {
+            width: 200px;
+            background: #16213e;
+            border-right: 2px solid #0f3460;
+            overflow-y: auto;
+            flex-shrink: 0;
+            padding: 8px;
+        }
+        #palette h3 {
+            font-size: 13px;
+            color: #aaa;
+            margin: 8px 0 4px;
+            text-transform: uppercase;
+        }
+        .palette-section {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+        .palette-item {
+            width: 36px;
+            height: 36px;
+            border: 2px solid #333;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            text-align: center;
+            border-radius: 3px;
+            position: relative;
+        }
+        .palette-item:hover { border-color: #888; }
+        .palette-item.selected { border-color: #e94560; box-shadow: 0 0 6px #e94560; }
+        .palette-item .label {
+            font-size: 8px;
+            position: absolute;
+            bottom: 1px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            color: #ccc;
+        }
+
+        /* Canvas area */
+        #canvas-container {
+            flex: 1;
+            overflow: auto;
+            position: relative;
+            background: #111;
+        }
+        #editor-canvas {
+            image-rendering: pixelated;
+            cursor: crosshair;
+        }
+
+        /* Status bar */
+        #statusbar {
+            background: #16213e;
+            padding: 4px 12px;
+            font-size: 12px;
+            color: #aaa;
+            border-top: 1px solid #0f3460;
+            display: flex;
+            gap: 20px;
+        }
+
+        /* Modal for export */
+        #modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+        #modal-overlay.show { display: flex; }
+        #modal {
+            background: #16213e;
+            border: 2px solid #0f3460;
+            border-radius: 8px;
+            padding: 20px;
+            width: 80%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow: auto;
+        }
+        #modal h2 { margin-bottom: 10px; }
+        #modal textarea {
+            width: 100%;
+            height: 400px;
+            background: #0a0a1a;
+            color: #0f0;
+            border: 1px solid #333;
+            font-family: monospace;
+            font-size: 12px;
+            padding: 8px;
+            resize: vertical;
+        }
+        #modal .modal-buttons {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        #modal button {
+            background: #0f3460;
+            color: #eee;
+            border: 1px solid #444;
+            padding: 8px 20px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        #modal button:hover { background: #1a5276; }
+        #modal button.primary { background: #e94560; border-color: #e94560; }
+    </style>
+</head>
+<body>
+    <div id="toolbar">
+        <div class="toolbar-group">
+            <label>Stage:</label>
+            <select id="stage-select">
+                <option value="flame">Flame Knight</option>
+                <option value="frost">Frost Sentinel</option>
+                <option value="thunder">Thunder Falcon</option>
+                <option value="blade">Blade Samurai</option>
+                <option value="hydro">Hydro Master</option>
+                <option value="storm">Storm King</option>
+                <option value="castle1">Castle 1</option>
+                <option value="castle2">Castle 2</option>
+                <option value="new">New Stage</option>
+            </select>
+            <button id="btn-load">Load</button>
+        </div>
+        <div class="toolbar-group">
+            <label>Size:</label>
+            <input type="number" id="level-width" value="64" min="16" max="512" style="width:60px">
+            <span>x</span>
+            <input type="number" id="level-height" value="16" min="10" max="64" style="width:60px">
+            <button id="btn-resize">Resize</button>
+        </div>
+        <div class="toolbar-group">
+            <label>Tool:</label>
+            <button id="tool-paint" class="active" data-tool="paint">Paint</button>
+            <button id="tool-erase" data-tool="erase">Erase</button>
+            <button id="tool-fill" data-tool="fill">Fill</button>
+        </div>
+        <div class="toolbar-group">
+            <label>Zoom:</label>
+            <button id="zoom-out">-</button>
+            <span id="zoom-label">2x</span>
+            <button id="zoom-in">+</button>
+        </div>
+        <div class="toolbar-group">
+            <button id="btn-save" style="background:#2e7d32;border-color:#2e7d32;">Save Stage</button>
+            <button id="btn-export">Export</button>
+            <button id="btn-import">Import</button>
+            <button id="btn-test">Test Play</button>
+        </div>
+    </div>
+
+    <div id="main">
+        <div id="palette">
+            <h3>Tiles</h3>
+            <div class="palette-section" id="tile-palette"></div>
+            <h3>Enemies</h3>
+            <div class="palette-section" id="enemy-palette"></div>
+            <h3>Items</h3>
+            <div class="palette-section" id="item-palette"></div>
+            <h3>Special</h3>
+            <div class="palette-section" id="special-palette"></div>
+        </div>
+        <div id="canvas-container">
+            <canvas id="editor-canvas"></canvas>
+        </div>
+    </div>
+
+    <div id="statusbar">
+        <span id="status-pos">Pos: 0, 0</span>
+        <span id="status-tile">Tile: Air</span>
+        <span id="status-tool">Tool: Paint</span>
+        <span id="status-selected">Selected: Solid</span>
+    </div>
+
+    <div id="modal-overlay">
+        <div id="modal">
+            <h2 id="modal-title">Export Level</h2>
+            <p id="modal-hint" style="font-size:12px;color:#aaa;margin-bottom:8px;"></p>
+            <textarea id="modal-text"></textarea>
+            <div class="modal-buttons">
+                <button id="modal-copy" class="primary">Copy to Clipboard</button>
+                <button id="modal-download" class="primary" style="background:#2e7d32;border-color:#2e7d32;">Download File</button>
+                <button id="modal-apply">Load into Editor</button>
+                <button id="modal-close">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ===== LEVEL EDITOR =====
+
+    const TILE_SIZE = 16;
+
+    // Tile/entity definitions
+    const TILES = {
+        '.': { name: 'Air', color: 'transparent', char: '.' },
+        'B': { name: 'Solid', color: '#666688', char: 'B' },
+        'S': { name: 'Spike', color: '#cc0000', char: 'S' },
+        'L': { name: 'Ladder', color: '#aa8844', char: 'L' },
+        'T': { name: 'LadderTop', color: '#ccaa66', char: 'T' },
+        'P': { name: 'Platform', color: '#888888', char: 'P' },
+        'C': { name: 'Checkpoint', color: '#00cc00', char: 'C' },
+        'G': { name: 'BossGate', color: '#666666', char: 'G' },
+        'W': { name: 'CurrR', color: '#0044a8', char: 'W' },
+        'w': { name: 'CurrL', color: '#0044a8', char: 'w' },
+        'b': { name: 'Bounce', color: '#f8d800', char: 'b' },
+    };
+
+    const ENEMIES = {
+        'M': { name: 'Met', color: '#e8a000', char: 'M' },
+        'J': { name: 'Jumper', color: '#00f800', char: 'J' },
+        'U': { name: 'Turret', color: '#cccccc', char: 'U' },
+        'F': { name: 'Flyer', color: '#f878f8', char: 'F' },
+        'A': { name: 'AquaShoot', color: '#10a8f8', char: 'A' },
+        'N': { name: 'CurrDrift', color: '#0044a8', char: 'N' },
+        'Y': { name: 'WindGust', color: '#70b0d8', char: 'Y' },
+        'Z': { name: 'StormDrone', color: '#6688aa', char: 'Z' },
+    };
+
+    const ITEMS = {
+        '1': { name: 'SmHP', color: '#f87858', char: '1' },
+        '2': { name: 'LgHP', color: '#f83800', char: '2' },
+        '6': { name: 'FullHP', color: '#f8f800', char: '6' },
+        '3': { name: 'SmEn', color: '#f8f898', char: '3' },
+        '4': { name: 'LgEn', color: '#f8d800', char: '4' },
+        '5': { name: '1-Up', color: '#3cbcfc', char: '5' },
+    };
+
+    const SPECIAL = {
+        '@': { name: 'Spawn', color: '#00ff00', char: '@' },
+        '*': { name: 'Boss', color: '#ff00ff', char: '*' },
+        'm': { name: 'MovPlatH', color: '#999999', char: 'm' },
+        'v': { name: 'MovPlatV', color: '#777777', char: 'v' },
+        'D': { name: 'DisBlock', color: '#8888ff', char: 'D' },
+        'K': { name: 'CrumBlk', color: '#443322', char: 'K' },
+    };
+
+    const ALL_ITEMS = { ...TILES, ...ENEMIES, ...ITEMS, ...SPECIAL };
+
+    // ===== SPRITE DATA (embedded from sprite-data.js) =====
+
+    const PLAYER_PALETTE = ['', '#000000', '#0058f8', '#3cbcfc', '#f8b878', '#fcfcfc'];
+    const PLAYER_STAND = [
+        [0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0],
+        [0,0,0,0,1,3,3,3,3,3,3,1,0,0,0,0],
+        [0,0,0,1,3,3,3,3,3,3,3,3,1,0,0,0],
+        [0,0,0,1,1,1,4,4,4,1,1,1,1,0,0,0],
+        [0,0,1,1,4,4,4,4,4,4,4,1,1,0,0,0],
+        [0,0,1,4,5,1,4,4,1,5,4,4,1,0,0,0],
+        [0,0,1,4,4,4,4,4,4,4,4,4,1,0,0,0],
+        [0,0,0,1,4,4,1,1,4,4,4,1,0,0,0,0],
+        [0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0],
+        [0,0,0,1,2,2,3,3,3,2,2,1,0,0,0,0],
+        [0,0,1,2,2,2,3,3,3,2,2,2,1,0,0,0],
+        [0,1,2,2,2,2,3,3,3,2,2,2,2,1,0,0],
+        [0,1,4,4,1,2,2,2,2,2,1,4,4,1,0,0],
+        [0,1,4,4,1,2,2,2,2,2,1,4,4,1,0,0],
+        [0,0,1,1,2,2,2,2,2,2,2,1,1,0,0,0],
+        [0,0,0,1,2,2,2,2,2,2,2,1,0,0,0,0],
+        [0,0,0,1,2,2,2,2,2,2,2,1,0,0,0,0],
+        [0,0,0,1,2,2,2,1,2,2,2,1,0,0,0,0],
+        [0,0,0,1,2,2,1,0,1,2,2,1,0,0,0,0],
+        [0,0,0,1,2,2,1,0,1,2,2,1,0,0,0,0],
+        [0,0,0,1,2,2,1,0,1,2,2,1,0,0,0,0],
+        [0,0,1,2,2,2,1,0,1,2,2,2,1,0,0,0],
+        [0,0,1,1,1,1,1,0,1,1,1,1,1,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    ];
+
+    const TILE_SOLID = [
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [1,2,3,3,3,3,3,3,3,3,3,3,3,3,2,1],
+        [1,2,3,2,2,2,2,2,2,2,2,2,2,3,2,1],
+        [1,2,3,2,3,3,3,3,3,3,3,3,2,3,2,1],
+        [1,2,3,2,3,2,2,2,2,2,2,3,2,3,2,1],
+        [1,2,3,2,3,2,3,3,3,3,2,3,2,3,2,1],
+        [1,2,3,2,3,2,3,2,2,3,2,3,2,3,2,1],
+        [1,2,3,2,3,2,3,2,2,3,2,3,2,3,2,1],
+        [1,2,3,2,3,2,3,3,3,3,2,3,2,3,2,1],
+        [1,2,3,2,3,2,2,2,2,2,2,3,2,3,2,1],
+        [1,2,3,2,3,3,3,3,3,3,3,3,2,3,2,1],
+        [1,2,3,2,2,2,2,2,2,2,2,2,2,3,2,1],
+        [1,2,3,3,3,3,3,3,3,3,3,3,3,3,2,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    ];
+    const TILE_PALETTE_DEFAULT = ['', '#444444', '#666688', '#8888aa'];
+    const TILE_PALETTE_FLAME = ['', '#441100', '#883300', '#cc6622'];
+    const TILE_PALETTE_FROST = ['', '#002244', '#004488', '#4488cc'];
+    const TILE_PALETTE_THUNDER = ['', '#332200', '#665500', '#aa8800'];
+    const TILE_PALETTE_BLADE = ['', '#333333', '#666666', '#999999'];
+
+    const TILE_SPIKE = [
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,1,2,2,1,0,0,0,0,0,0],
+        [0,0,0,0,0,0,1,2,2,1,0,0,0,0,0,0],
+        [0,0,0,0,0,1,2,2,2,2,1,0,0,0,0,0],
+        [0,0,0,0,0,1,2,3,3,2,1,0,0,0,0,0],
+        [0,0,0,0,1,2,2,3,3,2,2,1,0,0,0,0],
+        [0,0,0,0,1,2,3,3,3,3,2,1,0,0,0,0],
+        [0,0,0,1,2,2,3,3,3,3,2,2,1,0,0,0],
+        [0,0,0,1,2,3,3,3,3,3,3,2,1,0,0,0],
+        [0,0,1,2,2,3,3,3,3,3,3,2,2,1,0,0],
+        [0,0,1,2,3,3,3,3,3,3,3,3,2,1,0,0],
+        [0,1,2,2,3,3,3,3,3,3,3,3,2,2,1,0],
+        [0,1,2,3,3,3,3,3,3,3,3,3,3,2,1,0],
+        [1,2,2,3,3,3,3,3,3,3,3,3,3,2,2,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    ];
+    const SPIKE_PALETTE = ['', '#880000', '#cc0000', '#ff4444'];
+
+    const TILE_LADDER = [
+        [0,0,1,1,0,0,0,0,0,0,0,0,1,1,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0,0,1,1,0,0],
+        [0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0],
+        [0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0,0,1,1,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0,0,1,1,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0,0,1,1,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0,0,1,1,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0,0,1,1,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0,0,1,1,0,0],
+        [0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0],
+        [0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0,0,1,1,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0,0,1,1,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0,0,1,1,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0,0,1,1,0,0],
+    ];
+    const LADDER_PALETTE = ['', '#886622', '#aa8844', '#ccaa66'];
+
+    const TILE_PLATFORM = [
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,2,3,2,3,2,3,2,3,2,3,2,3,2,3,1],
+        [1,3,2,3,2,3,2,3,2,3,2,3,2,3,2,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [0,1,1,0,0,0,0,0,0,0,0,0,0,1,1,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    ];
+    const PLATFORM_PALETTE = ['', '#444444', '#888888', '#bbbbbb'];
+
+    const TILE_CHECKPOINT = [
+        [0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,1,1,2,2,2,2,2,0,0,0,0,0,0,0],
+        [0,0,1,1,2,3,3,3,2,0,0,0,0,0,0,0],
+        [0,0,1,1,2,3,3,3,2,0,0,0,0,0,0,0],
+        [0,0,1,1,2,2,2,2,2,0,0,0,0,0,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0],
+        [1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0],
+    ];
+    const CHECKPOINT_PALETTE = ['', '#666666', '#ff0000', '#ff8888'];
+
+    const TILE_BOSS_GATE = [
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,2,2,1,2,2,1,2,2,1,2,2,1,2,2,1],
+        [1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,2,2,1,2,2,1,2,2,1,2,2,1,2,2,1],
+        [1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,2,2,1,2,2,1,2,2,1,2,2,1,2,2,1],
+        [1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,2,2,1,2,2,1,2,2,1,2,2,1,2,2,1],
+        [1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,2,2,1,2,2,1,2,2,1,2,2,1,2,2,1],
+        [1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    ];
+    const BOSS_GATE_PALETTE = ['', '#444444', '#888888', '#666666'];
+
+    const MET_HIDDEN = [
+        [0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0],
+        [0,0,0,1,1,2,2,2,2,2,2,1,1,0,0,0],
+        [0,0,1,2,2,2,2,2,2,2,2,2,2,1,0,0],
+        [0,1,2,3,3,2,2,2,2,2,2,3,3,2,1,0],
+        [0,1,2,3,3,3,2,2,2,2,3,3,3,2,1,0],
+        [1,2,2,3,3,3,3,2,2,3,3,3,3,2,2,1],
+        [1,2,2,2,3,3,3,3,3,3,3,3,2,2,2,1],
+        [1,2,2,2,2,3,3,3,3,3,3,2,2,2,2,1],
+        [1,2,2,2,2,2,3,3,3,3,2,2,2,2,2,1],
+        [1,1,2,2,2,2,2,2,2,2,2,2,2,2,1,1],
+        [0,1,1,2,2,2,2,2,2,2,2,2,2,1,1,0],
+        [0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    ];
+    const MET_PALETTE = ['', '#000000', '#e8a000', '#f8d800', '#e0e0e0', '#ffffff'];
+
+    const JUMPER_SPRITE = [
+        [0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0],
+        [0,0,0,0,0,1,2,2,2,2,1,0,0,0,0,0],
+        [0,0,0,0,1,2,3,2,2,3,2,1,0,0,0,0],
+        [0,0,0,0,1,2,2,2,2,2,2,1,0,0,0,0],
+        [0,0,0,1,2,2,2,2,2,2,2,2,1,0,0,0],
+        [0,0,1,2,3,3,2,2,2,2,3,3,2,1,0,0],
+        [0,0,1,3,3,3,3,2,2,3,3,3,3,1,0,0],
+        [0,1,2,3,3,3,3,2,2,3,3,3,3,2,1,0],
+        [0,1,2,2,3,3,2,2,2,2,3,3,2,2,1,0],
+        [0,1,2,2,2,2,2,2,2,2,2,2,2,2,1,0],
+        [0,1,2,2,2,2,2,2,2,2,2,2,2,2,1,0],
+        [0,0,1,2,2,2,2,2,2,2,2,2,2,1,0,0],
+        [0,0,0,1,2,2,1,1,1,1,2,2,1,0,0,0],
+        [0,0,1,2,2,1,0,0,0,0,1,2,2,1,0,0],
+        [0,1,2,2,1,0,0,0,0,0,0,1,2,2,1,0],
+        [0,1,1,1,0,0,0,0,0,0,0,0,1,1,1,0],
+    ];
+    const JUMPER_PALETTE = ['', '#000000', '#00a800', '#00f800'];
+
+    const TURRET_SPRITE = [
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0],
+        [0,0,0,0,1,2,2,2,2,2,2,1,0,0,0,0],
+        [0,0,0,1,2,2,3,3,3,3,2,2,1,0,0,0],
+        [0,0,1,2,2,3,3,3,3,3,3,2,2,1,0,0],
+        [0,0,1,2,3,3,1,1,1,1,3,3,2,1,0,0],
+        [0,0,1,2,3,1,3,3,3,3,1,3,2,1,0,0],
+        [0,0,1,2,3,1,3,3,3,3,1,3,2,1,0,0],
+        [0,0,1,2,3,3,1,1,1,1,3,3,2,1,0,0],
+        [0,0,1,2,2,3,3,3,3,3,3,2,2,1,0,0],
+        [0,0,0,1,2,2,3,3,3,3,2,2,1,0,0,0],
+        [0,0,0,0,1,2,2,2,2,2,2,1,0,0,0,0],
+        [0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0],
+        [0,1,2,2,2,2,2,2,2,2,2,2,2,2,1,0],
+        [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
+    ];
+    const TURRET_PALETTE = ['', '#000000', '#888888', '#cccccc'];
+
+    const FLYER_SPRITE = [
+        [0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0],
+        [0,0,0,0,0,1,2,2,2,2,1,0,0,0,0,0],
+        [0,0,0,0,1,2,3,3,3,3,2,1,0,0,0,0],
+        [0,0,0,1,2,3,3,3,3,3,3,2,1,0,0,0],
+        [0,1,1,2,3,1,3,3,3,1,3,3,2,1,1,0],
+        [1,2,2,3,3,3,3,3,3,3,3,3,3,2,2,1],
+        [1,3,3,3,3,3,3,3,3,3,3,3,3,3,3,1],
+        [1,2,3,3,3,3,3,3,3,3,3,3,3,3,2,1],
+        [0,1,2,3,3,3,3,3,3,3,3,3,3,2,1,0],
+        [0,0,1,2,2,3,3,3,3,3,3,2,2,1,0,0],
+        [0,0,0,1,1,2,2,2,2,2,2,1,1,0,0,0],
+        [0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    ];
+    const FLYER_PALETTE = ['', '#000000', '#a800a8', '#f878f8'];
+
+    const PICKUP_SMALL_HP = [
+        [0,0,0,1,1,0,0,0],
+        [0,0,1,2,2,1,0,0],
+        [0,1,2,2,2,2,1,0],
+        [1,2,2,3,3,2,2,1],
+        [1,2,2,3,3,2,2,1],
+        [0,1,2,2,2,2,1,0],
+        [0,0,1,2,2,1,0,0],
+        [0,0,0,1,1,0,0,0],
+    ];
+    const PICKUP_LARGE_HP = [
+        [0,0,0,0,1,1,0,0,0,0],
+        [0,0,0,1,2,2,1,0,0,0],
+        [0,0,1,2,2,2,2,1,0,0],
+        [0,1,2,2,3,3,2,2,1,0],
+        [1,2,2,3,3,3,3,2,2,1],
+        [1,2,2,3,3,3,3,2,2,1],
+        [0,1,2,2,3,3,2,2,1,0],
+        [0,0,1,2,2,2,2,1,0,0],
+        [0,0,0,1,2,2,1,0,0,0],
+        [0,0,0,0,1,1,0,0,0,0],
+    ];
+    const HP_PICKUP_PALETTE = ['', '#000000', '#f83800', '#f87858'];
+    const ENERGY_PICKUP_PALETTE = ['', '#000000', '#f8d800', '#f8f898'];
+    const LIFE_PICKUP_PALETTE = ['', '#000000', '#0058f8', '#3cbcfc'];
+    const FULL_HP_PICKUP_PALETTE = ['', '#000000', '#fcfcfc', '#f8f800'];
+
+    const TILE_DISAPPEARING = [
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,3,3,3,3,3,3,3,3,3,3,3,3,3,3,1],
+        [1,3,2,2,2,2,2,2,2,2,2,2,2,2,3,1],
+        [1,3,2,3,3,3,3,3,3,3,3,3,3,2,3,1],
+        [1,3,2,3,3,3,3,3,3,3,3,3,3,2,3,1],
+        [1,3,2,3,3,3,3,3,3,3,3,3,3,2,3,1],
+        [1,3,2,3,3,3,3,3,3,3,3,3,3,2,3,1],
+        [1,3,2,3,3,3,3,3,3,3,3,3,3,2,3,1],
+        [1,3,2,3,3,3,3,3,3,3,3,3,3,2,3,1],
+        [1,3,2,3,3,3,3,3,3,3,3,3,3,2,3,1],
+        [1,3,2,3,3,3,3,3,3,3,3,3,3,2,3,1],
+        [1,3,2,3,3,3,3,3,3,3,3,3,3,2,3,1],
+        [1,3,2,3,3,3,3,3,3,3,3,3,3,2,3,1],
+        [1,3,2,2,2,2,2,2,2,2,2,2,2,2,3,1],
+        [1,3,3,3,3,3,3,3,3,3,3,3,3,3,3,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    ];
+    const DISAPPEARING_PALETTE = ['', '#4444aa', '#6666cc', '#8888ff'];
+
+    const MOVING_PLATFORM_SPRITE = [
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,2,3,2,3,2,3,2,3,2,3,2,3,2,3,1],
+        [1,3,2,3,2,3,2,3,2,3,2,3,2,3,2,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [0,1,1,0,0,0,0,0,0,0,0,0,0,1,1,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    ];
+    const MOVING_PLATFORM_PALETTE = ['', '#666666', '#999999', '#cccccc'];
+
+    // ===== NEW TILE SPRITES =====
+
+    const TILE_WATER_CURRENT_R = [
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [1,2,2,2,2,2,2,3,2,2,2,2,2,2,2,1],
+        [1,2,2,2,2,2,2,3,3,2,2,2,2,2,2,1],
+        [1,2,3,3,3,3,3,3,3,3,2,2,2,2,2,1],
+        [1,2,3,3,3,3,3,3,3,3,3,3,3,3,2,1],
+        [1,2,3,3,3,3,3,3,3,3,3,3,3,3,2,1],
+        [1,2,3,3,3,3,3,3,3,3,2,2,2,2,2,1],
+        [1,2,2,2,2,2,2,3,3,2,2,2,2,2,2,1],
+        [1,2,2,2,2,2,2,3,2,2,2,2,2,2,2,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    ];
+    const TILE_WATER_CURRENT_L = [
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [1,2,2,2,2,2,2,2,3,2,2,2,2,2,2,1],
+        [1,2,2,2,2,2,2,3,3,2,2,2,2,2,2,1],
+        [1,2,2,2,2,2,3,3,3,3,3,3,3,3,2,1],
+        [1,2,3,3,3,3,3,3,3,3,3,3,3,3,2,1],
+        [1,2,3,3,3,3,3,3,3,3,3,3,3,3,2,1],
+        [1,2,2,2,2,2,3,3,3,3,3,3,3,3,2,1],
+        [1,2,2,2,2,2,2,3,3,2,2,2,2,2,2,1],
+        [1,2,2,2,2,2,2,2,3,2,2,2,2,2,2,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    ];
+    const WATER_CURRENT_PALETTE = ['', '#001840', '#0044a8', '#00d0f8'];
+
+    const TILE_BOUNCE = [
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,3,3,3,3,3,3,3,3,3,3,3,3,3,3,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [1,2,3,2,3,2,3,2,3,2,3,2,3,2,2,1],
+        [1,2,2,3,2,3,2,3,2,3,2,3,2,3,2,1],
+        [1,2,3,2,3,2,3,2,3,2,3,2,3,2,2,1],
+        [1,2,2,3,2,3,2,3,2,3,2,3,2,3,2,1],
+        [1,2,3,2,3,2,3,2,3,2,3,2,3,2,2,1],
+        [1,2,2,3,2,3,2,3,2,3,2,3,2,3,2,1],
+        [1,2,3,2,3,2,3,2,3,2,3,2,3,2,2,1],
+        [1,2,2,3,2,3,2,3,2,3,2,3,2,3,2,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [1,3,3,3,3,3,3,3,3,3,3,3,3,3,3,1],
+        [1,3,3,3,3,3,3,3,3,3,3,3,3,3,3,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    ];
+    const BOUNCE_PALETTE = ['', '#786000', '#f8d800', '#fcfcfc'];
+
+    const TILE_CRUMBLE = [
+        [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+        [2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,2],
+        [2,3,2,2,2,2,2,2,2,2,2,2,2,2,3,2],
+        [2,3,2,1,2,2,2,2,2,2,2,2,1,2,3,2],
+        [2,3,2,2,1,2,2,2,2,2,2,1,2,2,3,2],
+        [2,3,2,2,2,1,2,2,2,2,1,2,2,2,3,2],
+        [2,3,2,2,2,2,1,2,2,1,2,2,2,2,3,2],
+        [2,3,2,2,2,2,2,1,1,2,2,2,2,2,3,2],
+        [2,3,2,2,2,2,2,1,1,2,2,2,2,2,3,2],
+        [2,3,2,2,2,2,1,2,2,1,2,2,2,2,3,2],
+        [2,3,2,2,2,1,2,2,2,2,1,2,2,2,3,2],
+        [2,3,2,2,1,2,2,2,2,2,2,1,2,2,3,2],
+        [2,3,2,1,2,2,2,2,2,2,2,2,1,2,3,2],
+        [2,3,2,2,2,2,2,2,2,2,2,2,2,2,3,2],
+        [2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,2],
+        [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+    ];
+    const CRUMBLE_PALETTE = ['', '#1a0e00', '#443322', '#6a5540'];
+
+    const TILE_PALETTE_HYDRO = ['', '#001830', '#003060', '#0050a0'];
+    const TILE_PALETTE_STORM = ['', '#180030', '#380060', '#6020a0'];
+
+    // ===== NEW ENEMY SPRITES =====
+
+    const AQUA_SHOOTER_SPRITE = [
+        [0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0],
+        [0,0,0,0,1,2,2,2,2,2,2,1,0,0,0,0],
+        [0,0,0,1,2,2,3,3,3,3,2,2,1,0,0,0],
+        [0,0,1,2,2,3,3,3,3,3,3,2,2,1,0,0],
+        [0,0,1,2,3,3,1,1,1,1,3,3,2,1,0,0],
+        [0,0,1,2,3,1,3,3,3,3,1,3,2,1,0,0],
+        [0,0,1,2,3,3,1,1,1,1,3,3,2,1,0,0],
+        [0,0,1,2,2,3,3,3,3,3,3,2,2,1,0,0],
+        [0,0,0,1,2,2,3,3,3,3,2,2,1,0,0,0],
+        [0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0],
+        [0,1,2,2,2,2,2,2,2,2,2,2,2,2,1,0],
+        [0,1,2,3,3,3,3,3,3,3,3,3,3,2,1,0],
+        [0,1,2,2,2,2,2,2,2,2,2,2,2,2,1,0],
+        [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
+    ];
+    const AQUA_SHOOTER_PALETTE = ['', '#000000', '#0044a8', '#10a8f8'];
+
+    const CURRENT_DRIFTER_SPRITE = [
+        [0,0,1,1,1,1,1,1,1,1,0,0],
+        [0,1,2,2,2,2,2,2,2,2,1,0],
+        [0,1,2,3,3,3,3,3,3,2,1,0],
+        [0,1,2,3,1,1,1,1,3,2,1,0],
+        [0,1,2,2,2,2,2,2,2,2,1,0],
+        [0,1,2,3,3,2,2,3,3,2,1,0],
+        [0,0,1,1,1,1,1,1,1,1,0,0],
+        [0,0,1,2,2,2,2,2,2,1,0,0],
+        [0,0,1,2,2,2,2,2,2,1,0,0],
+        [0,0,1,2,1,1,1,1,2,1,0,0],
+        [0,1,2,2,1,0,0,1,2,2,1,0],
+        [0,1,2,2,1,0,0,1,2,2,1,0],
+        [0,1,1,1,1,0,0,1,1,1,1,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0],
+    ];
+    const CURRENT_DRIFTER_PALETTE = ['', '#000000', '#0044a8', '#10a8f8'];
+
+    const WIND_GUST_SPRITE = [
+        [0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0],
+        [0,0,0,1,2,2,2,2,2,2,2,2,1,0,0,0],
+        [0,1,1,2,2,3,3,3,3,3,3,2,2,1,1,0],
+        [1,2,2,3,3,1,3,3,3,3,1,3,3,2,2,1],
+        [1,2,3,3,3,3,3,3,3,3,3,3,3,3,2,1],
+        [1,2,3,3,3,3,3,3,3,3,3,3,3,3,2,1],
+        [1,2,2,3,3,1,3,3,3,3,1,3,3,2,2,1],
+        [0,1,1,2,2,3,3,3,3,3,3,2,2,1,1,0],
+        [0,0,0,1,2,2,2,2,2,2,2,2,1,0,0,0],
+        [0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0],
+    ];
+    const WIND_GUST_PALETTE = ['', '#000000', '#304050', '#70b0d8'];
+
+    const STORM_DRONE_SPRITE = [
+        [0,0,1,1,1,1,1,1,1,1,1,1,0,0],
+        [0,1,2,2,2,2,2,2,2,2,2,2,1,0],
+        [1,2,2,3,3,3,3,3,3,3,3,2,2,1],
+        [1,2,3,3,1,3,3,3,3,1,3,3,2,1],
+        [1,2,3,3,3,3,3,3,3,3,3,3,2,1],
+        [1,2,3,3,3,4,4,4,4,3,3,3,2,1],
+        [1,2,3,3,3,4,4,4,4,3,3,3,2,1],
+        [1,2,3,3,3,4,4,4,4,3,3,3,2,1],
+        [1,2,3,3,3,3,3,3,3,3,3,3,2,1],
+        [1,2,3,3,1,3,3,3,3,1,3,3,2,1],
+        [1,2,2,3,3,3,3,3,3,3,3,2,2,1],
+        [0,1,2,2,2,2,2,2,2,2,2,2,1,0],
+        [0,0,1,1,1,1,1,1,1,1,1,1,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    ];
+    const STORM_DRONE_PALETTE = ['', '#000000', '#333344', '#6688aa', '#f8d800'];
+
+    // Boss marker sprite (16x16) - star/skull icon
+    const BOSS_MARKER = [
+        [0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0],
+        [0,0,0,0,0,1,2,2,2,2,1,0,0,0,0,0],
+        [0,0,0,0,1,2,2,2,2,2,2,1,0,0,0,0],
+        [0,0,0,1,2,2,3,2,2,3,2,2,1,0,0,0],
+        [0,0,1,2,2,2,3,2,2,3,2,2,2,1,0,0],
+        [0,0,1,2,2,2,2,2,2,2,2,2,2,1,0,0],
+        [0,1,2,2,2,2,2,2,2,2,2,2,2,2,1,0],
+        [0,1,2,2,2,3,2,2,2,2,3,2,2,2,1,0],
+        [0,1,2,2,2,2,3,3,3,3,2,2,2,2,1,0],
+        [0,0,1,2,2,2,2,2,2,2,2,2,2,1,0,0],
+        [0,0,1,2,2,2,2,2,2,2,2,2,2,1,0,0],
+        [0,0,0,1,2,2,2,2,2,2,2,2,1,0,0,0],
+        [0,0,0,0,1,2,2,2,2,2,2,1,0,0,0,0],
+        [0,0,0,0,0,1,2,2,2,2,1,0,0,0,0,0],
+        [0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    ];
+    const BOSS_MARKER_PALETTE = ['', '#000000', '#cc00cc', '#ff44ff'];
+
+    // Map characters to sprite data + palette
+    const SPRITE_MAP = {
+        'B': { pixels: TILE_SOLID, palette: null }, // palette set by stage
+        'S': { pixels: TILE_SPIKE, palette: SPIKE_PALETTE },
+        'L': { pixels: TILE_LADDER, palette: LADDER_PALETTE },
+        'T': { pixels: TILE_LADDER, palette: LADDER_PALETTE },
+        'P': { pixels: TILE_PLATFORM, palette: PLATFORM_PALETTE },
+        'C': { pixels: TILE_CHECKPOINT, palette: CHECKPOINT_PALETTE },
+        'G': { pixels: TILE_BOSS_GATE, palette: BOSS_GATE_PALETTE },
+        'M': { pixels: MET_HIDDEN, palette: MET_PALETTE },
+        'J': { pixels: JUMPER_SPRITE, palette: JUMPER_PALETTE },
+        'U': { pixels: TURRET_SPRITE, palette: TURRET_PALETTE },
+        'F': { pixels: FLYER_SPRITE, palette: FLYER_PALETTE },
+        '1': { pixels: PICKUP_SMALL_HP, palette: HP_PICKUP_PALETTE },
+        '2': { pixels: PICKUP_LARGE_HP, palette: HP_PICKUP_PALETTE },
+        '3': { pixels: PICKUP_SMALL_HP, palette: ENERGY_PICKUP_PALETTE },
+        '4': { pixels: PICKUP_LARGE_HP, palette: ENERGY_PICKUP_PALETTE },
+        '5': { pixels: PICKUP_SMALL_HP, palette: LIFE_PICKUP_PALETTE },
+        '6': { pixels: PICKUP_LARGE_HP, palette: FULL_HP_PICKUP_PALETTE },
+        '@': { pixels: PLAYER_STAND, palette: PLAYER_PALETTE },
+        '*': { pixels: BOSS_MARKER, palette: BOSS_MARKER_PALETTE },
+        'm': { pixels: MOVING_PLATFORM_SPRITE, palette: MOVING_PLATFORM_PALETTE },
+        'v': { pixels: MOVING_PLATFORM_SPRITE, palette: MOVING_PLATFORM_PALETTE },
+        'D': { pixels: TILE_DISAPPEARING, palette: DISAPPEARING_PALETTE },
+        'W': { pixels: TILE_WATER_CURRENT_R, palette: WATER_CURRENT_PALETTE },
+        'w': { pixels: TILE_WATER_CURRENT_L, palette: WATER_CURRENT_PALETTE },
+        'b': { pixels: TILE_BOUNCE, palette: BOUNCE_PALETTE },
+        'K': { pixels: TILE_CRUMBLE, palette: CRUMBLE_PALETTE },
+        'A': { pixels: AQUA_SHOOTER_SPRITE, palette: AQUA_SHOOTER_PALETTE },
+        'N': { pixels: CURRENT_DRIFTER_SPRITE, palette: CURRENT_DRIFTER_PALETTE },
+        'Y': { pixels: WIND_GUST_SPRITE, palette: WIND_GUST_PALETTE },
+        'Z': { pixels: STORM_DRONE_SPRITE, palette: STORM_DRONE_PALETTE },
+    };
+
+    // Sprite canvas cache: key = char + paletteKey
+    const spriteCanvasCache = {};
+
+    function getStageTilePalette() {
+        const palMap = {
+            flame: TILE_PALETTE_FLAME,
+            frost: TILE_PALETTE_FROST,
+            thunder: TILE_PALETTE_THUNDER,
+            blade: TILE_PALETTE_BLADE,
+            hydro: TILE_PALETTE_HYDRO,
+            storm: TILE_PALETTE_STORM,
+        };
+        return palMap[currentStage] || TILE_PALETTE_DEFAULT;
+    }
+
+    function renderSpriteToCanvas(pixels, palette, targetSize) {
+        const h = pixels.length;
+        const w = pixels[0].length;
+        // Render at 1:1 first
+        const offscreen = document.createElement('canvas');
+        offscreen.width = w;
+        offscreen.height = h;
+        const offCtx = offscreen.getContext('2d');
+        for (let r = 0; r < h; r++) {
+            for (let c = 0; c < w; c++) {
+                const idx = pixels[r][c];
+                if (idx === 0) continue;
+                offCtx.fillStyle = palette[idx] || '#ff00ff';
+                offCtx.fillRect(c, r, 1, 1);
+            }
+        }
+        return offscreen;
+    }
+
+    function getSpriteCanvas(ch, targetSize) {
+        const spriteInfo = SPRITE_MAP[ch];
+        if (!spriteInfo) return null;
+
+        let palette = spriteInfo.palette;
+        if (ch === 'B') palette = getStageTilePalette();
+
+        const cacheKey = ch + '_' + (ch === 'B' ? currentStage : 'default');
+        if (spriteCanvasCache[cacheKey]) return spriteCanvasCache[cacheKey];
+
+        const canvas = renderSpriteToCanvas(spriteInfo.pixels, palette, targetSize);
+        spriteCanvasCache[cacheKey] = canvas;
+        return canvas;
+    }
+
+    function clearSpriteCache() {
+        for (const key in spriteCanvasCache) {
+            delete spriteCanvasCache[key];
+        }
+    }
+
+    // Stage BG colors
+    const STAGE_BG = {
+        flame: '#200800',
+        frost: '#001030',
+        thunder: '#181000',
+        blade: '#101010',
+        hydro: '#000814',
+        storm: '#040012',
+        castle1: '#100020',
+        castle2: '#080008',
+        new: '#000000',
+    };
+
+    // Editor state
+    let grid = [];
+    let gridWidth = 64;
+    let gridHeight = 16;
+    let selectedChar = 'B';
+    let currentTool = 'paint';
+    let zoom = 2;
+    let isPainting = false;
+    let currentStage = 'flame';
+    let bgColor = '#200800';
+
+    const canvas = document.getElementById('editor-canvas');
+    const ctx = canvas.getContext('2d');
+    const container = document.getElementById('canvas-container');
+
+    // ===== INITIALIZATION =====
+
+    function initGrid(w, h) {
+        gridWidth = w;
+        gridHeight = h;
+        grid = [];
+        for (let r = 0; r < h; r++) {
+            grid[r] = [];
+            for (let c = 0; c < w; c++) {
+                grid[r][c] = '.';
+            }
+        }
+        // Add ground
+        for (let c = 0; c < w; c++) {
+            grid[h - 1][c] = 'B';
+            grid[h - 2][c] = 'B';
+        }
+        // Add player spawn
+        grid[h - 3][3] = '@';
+
+        updateCanvasSize();
+        render();
+    }
+
+    function updateCanvasSize() {
+        canvas.width = gridWidth * TILE_SIZE * zoom;
+        canvas.height = gridHeight * TILE_SIZE * zoom;
+    }
+
+    // ===== PALETTE SETUP =====
+
+    function buildPalette(containerId, items) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = '';
+        for (const [ch, def] of Object.entries(items)) {
+            const el = document.createElement('div');
+            el.className = 'palette-item';
+            if (ch === selectedChar) el.classList.add('selected');
+            el.dataset.char = ch;
+            el.title = def.name + ' (' + ch + ')';
+
+            // Try to render a sprite preview
+            const spriteCanvas = getSpriteCanvas(ch, 32);
+            if (spriteCanvas && ch !== '.') {
+                // Use a mini canvas to draw the sprite scaled into the palette item
+                const preview = document.createElement('canvas');
+                preview.width = 32;
+                preview.height = 32;
+                preview.style.width = '32px';
+                preview.style.height = '32px';
+                preview.style.imageRendering = 'pixelated';
+                preview.style.position = 'absolute';
+                preview.style.top = '1px';
+                preview.style.left = '1px';
+                const pCtx = preview.getContext('2d');
+                pCtx.imageSmoothingEnabled = false;
+                // Scale sprite to fit 32x32
+                const sw = spriteCanvas.width;
+                const sh = spriteCanvas.height;
+                const scale = Math.min(32 / sw, 32 / sh);
+                const dw = sw * scale;
+                const dh = sh * scale;
+                pCtx.drawImage(spriteCanvas, (32 - dw) / 2, (32 - dh) / 2, dw, dh);
+                el.style.background = '#111';
+                el.appendChild(preview);
+            } else if (def.color === 'transparent') {
+                el.style.background = 'repeating-conic-gradient(#333 0% 25%, #222 0% 50%) 50% / 8px 8px';
+            } else {
+                el.style.background = def.color;
+            }
+
+            const label = document.createElement('span');
+            label.className = 'label';
+            label.textContent = def.name;
+            el.appendChild(label);
+
+            el.addEventListener('click', () => selectPaletteItem(ch));
+            container.appendChild(el);
+        }
+    }
+
+    function selectPaletteItem(ch) {
+        selectedChar = ch;
+        document.querySelectorAll('.palette-item').forEach(el => {
+            el.classList.toggle('selected', el.dataset.char === ch);
+        });
+        document.getElementById('status-selected').textContent = 'Selected: ' + (ALL_ITEMS[ch]?.name || ch);
+    }
+
+    function buildAllPalettes() {
+        buildPalette('tile-palette', TILES);
+        buildPalette('enemy-palette', ENEMIES);
+        buildPalette('item-palette', ITEMS);
+        buildPalette('special-palette', SPECIAL);
+    }
+
+    // ===== RENDERING =====
+
+    function render() {
+        ctx.imageSmoothingEnabled = false;
+        const ts = TILE_SIZE * zoom;
+
+        // Background
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Grid
+        for (let r = 0; r < gridHeight; r++) {
+            for (let c = 0; c < gridWidth; c++) {
+                const ch = grid[r][c];
+                if (ch === '.') continue;
+
+                const def = ALL_ITEMS[ch];
+                if (!def) continue;
+
+                const x = c * ts;
+                const y = r * ts;
+
+                // Try to draw sprite
+                const spriteCanvas = getSpriteCanvas(ch, ts);
+                if (spriteCanvas) {
+                    const sw = spriteCanvas.width;
+                    const sh = spriteCanvas.height;
+                    // Scale to fit the tile cell
+                    const scale = Math.min(ts / sw, ts / sh);
+                    const dw = sw * scale;
+                    const dh = sh * scale;
+                    ctx.drawImage(spriteCanvas, x + (ts - dw) / 2, y + (ts - dh) / 2, dw, dh);
+                } else {
+                    // Fallback to colored square
+                    ctx.fillStyle = def.color;
+                    ctx.fillRect(x, y, ts, ts);
+                }
+            }
+        }
+
+        // Grid lines
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 1;
+        for (let r = 0; r <= gridHeight; r++) {
+            ctx.beginPath();
+            ctx.moveTo(0, r * ts + 0.5);
+            ctx.lineTo(canvas.width, r * ts + 0.5);
+            ctx.stroke();
+        }
+        for (let c = 0; c <= gridWidth; c++) {
+            ctx.beginPath();
+            ctx.moveTo(c * ts + 0.5, 0);
+            ctx.lineTo(c * ts + 0.5, canvas.height);
+            ctx.stroke();
+        }
+
+        // Screen-width guides (every 16 tiles = one screen width at 256px internal)
+        ctx.strokeStyle = 'rgba(255,255,0,0.2)';
+        ctx.lineWidth = 2;
+        for (let c = 16; c < gridWidth; c += 16) {
+            ctx.beginPath();
+            ctx.moveTo(c * ts, 0);
+            ctx.lineTo(c * ts, canvas.height);
+            ctx.stroke();
+        }
+    }
+
+    // ===== EDITING =====
+
+    function setTile(col, row, ch) {
+        if (row < 0 || row >= gridHeight || col < 0 || col >= gridWidth) return;
+
+        // Enforce single player spawn and boss spawn
+        if (ch === '@' || ch === '*') {
+            for (let r = 0; r < gridHeight; r++) {
+                for (let c = 0; c < gridWidth; c++) {
+                    if (grid[r][c] === ch) grid[r][c] = '.';
+                }
+            }
+        }
+
+        grid[row][col] = ch;
+    }
+
+    function floodFill(col, row, targetChar, fillChar) {
+        if (targetChar === fillChar) return;
+        if (row < 0 || row >= gridHeight || col < 0 || col >= gridWidth) return;
+        if (grid[row][col] !== targetChar) return;
+
+        const stack = [[col, row]];
+        const visited = new Set();
+
+        while (stack.length > 0) {
+            const [c, r] = stack.pop();
+            const key = `${c},${r}`;
+            if (visited.has(key)) continue;
+            if (r < 0 || r >= gridHeight || c < 0 || c >= gridWidth) continue;
+            if (grid[r][c] !== targetChar) continue;
+
+            visited.add(key);
+            grid[r][c] = fillChar;
+
+            stack.push([c + 1, r], [c - 1, r], [c, r + 1], [c, r - 1]);
+        }
+    }
+
+    function getGridPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const ts = TILE_SIZE * zoom;
+        return {
+            col: Math.floor(x / ts),
+            row: Math.floor(y / ts),
+        };
+    }
+
+    // ===== MOUSE EVENTS =====
+
+    canvas.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const pos = getGridPos(e);
+        isPainting = true;
+
+        if (currentTool === 'fill') {
+            const target = grid[pos.row]?.[pos.col];
+            if (target !== undefined) {
+                floodFill(pos.col, pos.row, target, selectedChar);
+                render();
+            }
+        } else if (currentTool === 'erase') {
+            setTile(pos.col, pos.row, '.');
+            render();
+        } else {
+            setTile(pos.col, pos.row, selectedChar);
+            render();
+        }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        const pos = getGridPos(e);
+        document.getElementById('status-pos').textContent = `Pos: ${pos.col}, ${pos.row}`;
+        const ch = grid[pos.row]?.[pos.col] || '.';
+        document.getElementById('status-tile').textContent = `Tile: ${ALL_ITEMS[ch]?.name || ch}`;
+
+        if (isPainting && currentTool !== 'fill') {
+            if (currentTool === 'erase') {
+                setTile(pos.col, pos.row, '.');
+            } else {
+                setTile(pos.col, pos.row, selectedChar);
+            }
+            render();
+        }
+    });
+
+    window.addEventListener('mouseup', () => { isPainting = false; });
+
+    // ===== KEYBOARD SHORTCUTS =====
+
+    window.addEventListener('keydown', (e) => {
+        // Don't capture if modal is open
+        if (document.getElementById('modal-overlay').classList.contains('show')) return;
+        // Don't capture if focus is on an input
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+        switch (e.key) {
+            case 'b': case 'B': selectPaletteItem('B'); break;
+            case '.': selectPaletteItem('.'); break;
+            case 's': selectPaletteItem('S'); break;
+            case 'l': selectPaletteItem('L'); break;
+            case 'p': selectPaletteItem('P'); break;
+            case 'c': selectPaletteItem('C'); break;
+            case 'g': selectPaletteItem('G'); break;
+            case 'e': setToolActive('erase'); break;
+            case 'd': setToolActive('paint'); break;
+            case 'f': setToolActive('fill'); break;
+            case '+': case '=': adjustZoom(1); break;
+            case '-': adjustZoom(-1); break;
+        }
+    });
+
+    // ===== TOOLBAR EVENTS =====
+
+    function setToolActive(tool) {
+        currentTool = tool;
+        document.querySelectorAll('[data-tool]').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tool === tool);
+        });
+        document.getElementById('status-tool').textContent = 'Tool: ' + tool.charAt(0).toUpperCase() + tool.slice(1);
+    }
+
+    document.querySelectorAll('[data-tool]').forEach(btn => {
+        btn.addEventListener('click', () => setToolActive(btn.dataset.tool));
+    });
+
+    function adjustZoom(delta) {
+        zoom = Math.max(1, Math.min(4, zoom + delta));
+        document.getElementById('zoom-label').textContent = zoom + 'x';
+        updateCanvasSize();
+        render();
+    }
+
+    document.getElementById('zoom-in').addEventListener('click', () => adjustZoom(1));
+    document.getElementById('zoom-out').addEventListener('click', () => adjustZoom(-1));
+
+    // ===== EXPORT / IMPORT =====
+
+    function gridToString() {
+        let lines = [];
+        for (let r = 0; r < gridHeight; r++) {
+            lines.push(grid[r].join(''));
+        }
+        // Trim trailing empty lines
+        while (lines.length > 0 && lines[lines.length - 1].replace(/\./g, '') === '') {
+            lines.pop();
+        }
+        return lines.join('\n');
+    }
+
+    function generateExport() {
+        const stageInfo = document.getElementById('stage-select').value;
+        const layoutStr = gridToString();
+
+        const paletteMap = {
+            flame: 'TILE_PALETTE_FLAME', frost: 'TILE_PALETTE_FROST',
+            thunder: 'TILE_PALETTE_THUNDER', blade: 'TILE_PALETTE_BLADE',
+            hydro: 'TILE_PALETTE_HYDRO', storm: 'TILE_PALETTE_STORM',
+            castle1: 'TILE_PALETTE_DEFAULT', castle2: 'TILE_PALETTE_DEFAULT',
+            new: 'TILE_PALETTE_DEFAULT',
+        };
+        const bossMap = {
+            flame: "'flame_knight'", frost: "'frost_sentinel'",
+            thunder: "'thunder_falcon'", blade: "'blade_samurai'",
+            hydro: "'hydro_master'", storm: "'storm_king'",
+            castle1: 'null', castle2: "'final_boss'",
+            new: 'null',
+        };
+        const nameMap = {
+            flame: 'Flame Knight', frost: 'Frost Sentinel',
+            thunder: 'Thunder Falcon', blade: 'Blade Samurai',
+            hydro: 'Hydro Master', storm: 'Storm King',
+            castle1: 'Wily Castle 1', castle2: 'Wily Castle 2',
+            new: 'Custom Stage',
+        };
+
+        const pal = paletteMap[stageInfo] || 'TILE_PALETTE_DEFAULT';
+        const boss = bossMap[stageInfo] || 'null';
+        const name = nameMap[stageInfo] || 'Custom Stage';
+        const bg = bgColor;
+
+        return `import { ${pal} } from '../../graphics/sprite-data.js';
+
+export const STAGE_${stageInfo.toUpperCase()} = {
+    stageName: '${name}',
+    bossType: ${boss},
+    bgColor: '${bg}',
+    palette: ${pal},
+    layout: \`
+${layoutStr}
+\`
+};
+`;
+    }
+
+    function parseLayoutString(text) {
+        // Extract just the layout part if it's a full module
+        let layoutStr = text;
+        const layoutMatch = text.match(/layout:\s*`\n?([\s\S]*?)\n?`/);
+        if (layoutMatch) {
+            layoutStr = layoutMatch[1];
+        }
+
+        const lines = layoutStr.split('\n').filter(l => l.length > 0);
+        if (lines.length === 0) return null;
+
+        const h = lines.length;
+        const w = Math.max(...lines.map(l => l.length));
+
+        const newGrid = [];
+        for (let r = 0; r < h; r++) {
+            newGrid[r] = [];
+            for (let c = 0; c < w; c++) {
+                newGrid[r][c] = c < lines[r].length ? lines[r][c] : '.';
+            }
+        }
+        return { grid: newGrid, width: w, height: h };
+    }
+
+    // ===== LOAD STAGE =====
+
+    async function loadStage(stageName) {
+        currentStage = stageName;
+        bgColor = STAGE_BG[stageName] || '#000000';
+
+        if (stageName === 'new') {
+            const w = parseInt(document.getElementById('level-width').value) || 64;
+            const h = parseInt(document.getElementById('level-height').value) || 16;
+            initGrid(w, h);
+            return;
+        }
+
+        const stageFile = {
+            flame: 'stage-flame', frost: 'stage-frost',
+            thunder: 'stage-thunder', blade: 'stage-blade',
+            hydro: 'stage-hydro', storm: 'stage-storm',
+            castle1: 'stage-castle1', castle2: 'stage-castle2',
+        }[stageName];
+
+        try {
+            const resp = await fetch(`js/levels/stage-data/${stageFile}.js`);
+            const text = await resp.text();
+            const result = parseLayoutString(text);
+            if (result) {
+                grid = result.grid;
+                gridWidth = result.width;
+                gridHeight = result.height;
+                document.getElementById('level-width').value = gridWidth;
+                document.getElementById('level-height').value = gridHeight;
+                updateCanvasSize();
+                render();
+            }
+        } catch (e) {
+            console.error('Failed to load stage:', e);
+            initGrid(64, 16);
+        }
+    }
+
+    // ===== BUTTON HANDLERS =====
+
+    document.getElementById('btn-load').addEventListener('click', () => {
+        loadStage(document.getElementById('stage-select').value);
+    });
+
+    document.getElementById('btn-resize').addEventListener('click', () => {
+        const newW = parseInt(document.getElementById('level-width').value) || 64;
+        const newH = parseInt(document.getElementById('level-height').value) || 16;
+
+        const newGrid = [];
+        for (let r = 0; r < newH; r++) {
+            newGrid[r] = [];
+            for (let c = 0; c < newW; c++) {
+                if (r < gridHeight && c < gridWidth) {
+                    newGrid[r][c] = grid[r][c];
+                } else {
+                    newGrid[r][c] = '.';
+                }
+            }
+        }
+        grid = newGrid;
+        gridWidth = newW;
+        gridHeight = newH;
+        updateCanvasSize();
+        render();
+    });
+
+    function getStageFilename() {
+        const stageFile = {
+            flame: 'stage-flame.js', frost: 'stage-frost.js',
+            thunder: 'stage-thunder.js', blade: 'stage-blade.js',
+            hydro: 'stage-hydro.js', storm: 'stage-storm.js',
+            castle1: 'stage-castle1.js', castle2: 'stage-castle2.js',
+            new: 'stage-custom.js',
+        };
+        return stageFile[currentStage] || 'stage-custom.js';
+    }
+
+    function downloadFile(filename, content) {
+        const blob = new Blob([content], { type: 'text/javascript' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    // Save Stage button - saves directly to the stage file
+    document.getElementById('btn-save').addEventListener('click', async () => {
+        const exportData = generateExport();
+        const filename = getStageFilename();
+        const btn = document.getElementById('btn-save');
+        btn.textContent = 'Saving...';
+        btn.disabled = true;
+
+        try {
+            const resp = await fetch('/save-stage', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename, content: exportData }),
+            });
+            const result = await resp.json();
+            if (result.ok) {
+                btn.textContent = 'Saved!';
+                btn.style.background = '#4caf50';
+            } else {
+                btn.textContent = 'Error!';
+                btn.style.background = '#c62828';
+                alert('Save failed: ' + result.error);
+            }
+        } catch (e) {
+            btn.textContent = 'Error!';
+            btn.style.background = '#c62828';
+            alert('Could not save. Make sure you are running the game with:\n\nnode server.js\n\n(from the Ultraman folder)');
+        }
+
+        setTimeout(() => {
+            btn.textContent = 'Save Stage';
+            btn.style.background = '#2e7d32';
+            btn.disabled = false;
+        }, 2000);
+    });
+
+    document.getElementById('btn-export').addEventListener('click', () => {
+        const filename = getStageFilename();
+        document.getElementById('modal-title').textContent = 'Export Level';
+        document.getElementById('modal-hint').textContent = `Save this as: js/levels/stage-data/${filename}`;
+        document.getElementById('modal-text').value = generateExport();
+        document.getElementById('modal-download').style.display = '';
+        document.getElementById('modal-overlay').classList.add('show');
+    });
+
+    document.getElementById('btn-import').addEventListener('click', () => {
+        document.getElementById('modal-title').textContent = 'Import Level';
+        document.getElementById('modal-hint').textContent = 'Paste level layout text or full stage module code below, then click "Load into Editor".';
+        document.getElementById('modal-text').value = '';
+        document.getElementById('modal-text').placeholder = 'Paste level layout text or full stage module here...';
+        document.getElementById('modal-download').style.display = 'none';
+        document.getElementById('modal-overlay').classList.add('show');
+    });
+
+    document.getElementById('modal-copy').addEventListener('click', () => {
+        const textarea = document.getElementById('modal-text');
+        textarea.select();
+        navigator.clipboard.writeText(textarea.value);
+        document.getElementById('modal-copy').textContent = 'Copied!';
+        setTimeout(() => { document.getElementById('modal-copy').textContent = 'Copy to Clipboard'; }, 1500);
+    });
+
+    document.getElementById('modal-download').addEventListener('click', () => {
+        const filename = getStageFilename();
+        const content = document.getElementById('modal-text').value;
+        downloadFile(filename, content);
+        document.getElementById('modal-download').textContent = 'Downloaded!';
+        setTimeout(() => { document.getElementById('modal-download').textContent = 'Download File'; }, 2000);
+    });
+
+    document.getElementById('modal-apply').addEventListener('click', () => {
+        const text = document.getElementById('modal-text').value;
+        const result = parseLayoutString(text);
+        if (result) {
+            grid = result.grid;
+            gridWidth = result.width;
+            gridHeight = result.height;
+            document.getElementById('level-width').value = gridWidth;
+            document.getElementById('level-height').value = gridHeight;
+            updateCanvasSize();
+            render();
+            document.getElementById('modal-overlay').classList.remove('show');
+        } else {
+            alert('Could not parse level data. Make sure it contains a valid layout.');
+        }
+    });
+
+    document.getElementById('modal-close').addEventListener('click', () => {
+        document.getElementById('modal-overlay').classList.remove('show');
+    });
+
+    document.getElementById('btn-test').addEventListener('click', () => {
+        // Save to localStorage and open game with test flag
+        const exportData = generateExport();
+        localStorage.setItem('ultraman_test_level', exportData);
+        localStorage.setItem('ultraman_test_stage', currentStage);
+        window.open('index.html?test=1', '_blank');
+    });
+
+    // ===== RIGHT-CLICK TO PICK =====
+
+    canvas.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const pos = getGridPos(e);
+        const ch = grid[pos.row]?.[pos.col];
+        if (ch && ALL_ITEMS[ch]) {
+            selectPaletteItem(ch);
+        }
+    });
+
+    // ===== INIT =====
+
+    buildAllPalettes();
+    loadStage('flame');
+
+    </script>
+</body>
+</html>
